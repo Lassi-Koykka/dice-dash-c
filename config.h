@@ -1,0 +1,2 @@
+#define MOVE_COOLDOWN 0.13
+#define DEFAULT_TILESIZE 96
