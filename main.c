@@ -35,7 +35,7 @@ Grid *g;
 Player player;
 int startX = -1, startY = -1;
 
-int IsInbounds(int row, int col);
+int IsInbounds(Vector2 pos);
 
 void init();
 void draw();
@@ -63,10 +63,27 @@ int main() {
   return 0;
 }
 
-int IsInbounds(int row, int col) {
-  int onHorizontalLane = row >= H_LANE_START && row < H_LANE_END;
-  int onVerticalLane = col >= V_LANE_START && col < V_LANE_END;
+int IsInbounds(Vector2 pos) {
+  int onHorizontalLane = pos.y >= H_LANE_START && pos.y < H_LANE_END;
+  int onVerticalLane = pos.x >= V_LANE_START && pos.x < V_LANE_END;
   return onHorizontalLane && onVerticalLane;
+}
+
+Triangle getArrowPoints(KeyboardKey dir) {
+  if (dir == KEY_RIGHT)
+    return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
+  else if (dir == KEY_LEFT)
+    return (Triangle){{-0.3, 0.5}, {-0.1, 0.7}, {-0.1, 0.3}};
+  else if (dir == KEY_DOWN)
+    return (Triangle){{0.5, 1.3}, {0.7, 1.1}, {0.3, 1.1}};
+  else if (dir == KEY_UP)
+    return (Triangle){{0.5, -0.3}, {0.3, -0.1}, {0.7, -0.1}};
+
+  return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
+}
+
+Vector2 getAbsPos(Vector2 pos) {
+  return Vector2Add(Vector2Scale(pos, TILE_SIZE), (Vector2){startX, startY});
 }
 
 void init() {
@@ -95,23 +112,29 @@ void init() {
   }
 }
 
-void update() { float deltaTime = GetFrameTime(); }
-
-Triangle getArrowPoints(KeyboardKey dir) {
-  if (dir == KEY_UP)
-    return (Triangle){{0.5, -0.3}, {0.3, -0.1}, {0.7, -0.1}};
-  else if (dir == KEY_RIGHT)
-    return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
-  else if (dir == KEY_DOWN)
-    return (Triangle){{0.5, 1.3}, {0.7, 1.1}, {0.3, 1.1}};
+Vector2 getDirVec(KeyboardKey dir) {
+  if (dir == KEY_RIGHT)
+    return (Vector2){1, 0};
   else if (dir == KEY_LEFT)
-    return (Triangle){{-0.3, 0.5}, {-0.1, 0.7}, {-0.1, 0.3}};
-
-  return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
+    return (Vector2){-1, 0};
+  else if (dir == KEY_DOWN)
+    return (Vector2){0, 1};
+  else if (dir == KEY_UP)
+    return (Vector2){0, -1};
+  return (Vector2){0, 0};
 }
 
-Vector2 getAbsPos(Vector2 pos) {
-  return Vector2Add(Vector2Scale(pos, TILE_SIZE), (Vector2){startX, startY});
+void update() {
+  float deltaTime = GetFrameTime();
+
+  KeyboardKey key = GetKeyPressed();
+  if (key >= KEY_RIGHT && key <= KEY_UP) {
+    Vector2 dirDelta = getDirVec(key);
+    Vector2 newPos = Vector2Add(player.pos, dirDelta);
+    if (IsInbounds(newPos))
+      player.pos = newPos;
+    player.dir = key;
+  }
 }
 
 void draw() {
