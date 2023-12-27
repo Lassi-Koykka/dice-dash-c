@@ -17,10 +17,11 @@
 #define V_LANE_END 14
 #define PLAYER_START_X 11
 #define PLAYER_START_Y 6
+#define INPUT_BUF_LEN 16
 
 typedef struct {
   Vector2 pos;
-  Vector2 prevPos;
+  Vector2 nextPos;
   KeyboardKey dir;
 } Player;
 
@@ -30,8 +31,16 @@ typedef struct {
   Vector2 c;
 } Triangle;
 
+const int DIRS[4] = {KEY_RIGHT, KEY_LEFT, KEY_DOWN, KEY_UP};
+const Vector2 DIR_VECS[4] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+const Triangle DIR_ARROW_POINTS[4] = {{{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}},
+                                      {{-0.3, 0.5}, {-0.1, 0.7}, {-0.1, 0.3}},
+                                      {{0.5, 1.3}, {0.7, 1.1}, {0.3, 1.1}},
+                                      {{0.5, -0.3}, {0.3, -0.1}, {0.7, -0.1}}};
+
 // GLOBALS
-Grid *g;
+int inputBuffer[INPUT_BUF_LEN];
+Grid *g = NULL;
 Player player;
 int startX = -1, startY = -1;
 
@@ -70,16 +79,11 @@ int IsInbounds(Vector2 pos) {
 }
 
 Triangle getArrowPoints(KeyboardKey dir) {
-  if (dir == KEY_RIGHT)
-    return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
-  else if (dir == KEY_LEFT)
-    return (Triangle){{-0.3, 0.5}, {-0.1, 0.7}, {-0.1, 0.3}};
-  else if (dir == KEY_DOWN)
-    return (Triangle){{0.5, 1.3}, {0.7, 1.1}, {0.3, 1.1}};
-  else if (dir == KEY_UP)
-    return (Triangle){{0.5, -0.3}, {0.3, -0.1}, {0.7, -0.1}};
-
-  return (Triangle){{1.3, 0.5}, {1.1, 0.3}, {1.1, 0.7}};
+  for (int i = 0; i < 4; i++) {
+    if (dir == DIRS[i])
+      return DIR_ARROW_POINTS[i];
+  }
+  return (Triangle){{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
 }
 
 Vector2 getAbsPos(Vector2 pos) {
@@ -89,7 +93,7 @@ Vector2 getAbsPos(Vector2 pos) {
 void init() {
   player.pos = (Vector2){PLAYER_START_X, PLAYER_START_Y};
   player.dir = KEY_LEFT;
-  player.prevPos = (Vector2){PLAYER_START_X, PLAYER_START_Y};
+  player.nextPos = (Vector2){PLAYER_START_X, PLAYER_START_Y};
 
   g = NewGrid(GRID_W, GRID_H);
   int gridAbsW = TILE_SIZE * GRID_W;
@@ -112,28 +116,58 @@ void init() {
   }
 }
 
-Vector2 getDirVec(KeyboardKey dir) {
-  if (dir == KEY_RIGHT)
-    return (Vector2){1, 0};
-  else if (dir == KEY_LEFT)
-    return (Vector2){-1, 0};
-  else if (dir == KEY_DOWN)
-    return (Vector2){0, 1};
-  else if (dir == KEY_UP)
-    return (Vector2){0, -1};
+Vector2 getDirVec(KeyboardKey key) {
+  for (int i = 0; i < 4; i++) {
+    if (key == DIRS[i])
+      return DIR_VECS[i];
+  }
   return (Vector2){0, 0};
+}
+
+int isDirKey(KeyboardKey key) { return (key >= KEY_RIGHT && key <= KEY_UP); }
+
+int updateInputBuffer() {
+  int j = 0;
+  int tempBuffer[INPUT_BUF_LEN] = {0};
+
+  // Remove keys not currently pressed
+  for (int i = 0; i < INPUT_BUF_LEN; i++) {
+    KeyboardKey bufferKey = inputBuffer[i];
+    if (isDirKey(bufferKey) && !IsKeyUp(bufferKey)) {
+      tempBuffer[j] = bufferKey;
+      j++;
+    }
+  }
+
+  for (int i = 0; i < INPUT_BUF_LEN; i++) {
+    inputBuffer[i] = tempBuffer[i];
+  }
+
+  KeyboardKey pressedKey = GetKeyPressed();
+  if (isDirKey(pressedKey)) {
+    inputBuffer[j] = pressedKey;
+    j++;
+  }
+
+  return j;
 }
 
 void update() {
   float deltaTime = GetFrameTime();
 
-  KeyboardKey key = GetKeyPressed();
-  if (key >= KEY_RIGHT && key <= KEY_UP) {
-    Vector2 dirDelta = getDirVec(key);
-    Vector2 newPos = Vector2Add(player.pos, dirDelta);
-    if (IsInbounds(newPos))
-      player.pos = newPos;
-    player.dir = key;
+  int inputBufferLen = updateInputBuffer();
+
+  if (Vector2Equals(player.pos, player.nextPos)) {
+    KeyboardKey key = inputBufferLen > 0 ? inputBuffer[inputBufferLen - 1] : -1;
+    if (isDirKey(key)) {
+      Vector2 dirDelta = getDirVec(key);
+      Vector2 newPos = Vector2Add(player.pos, dirDelta);
+      if (IsInbounds(newPos))
+        player.nextPos = newPos;
+      player.dir = key;
+    }
+  } else {
+    player.pos = Vector2MoveTowards(player.pos, player.nextPos, 10 * deltaTime);
   }
 }
 
@@ -170,5 +204,10 @@ void draw() {
   Vector2 b = Vector2Add(Vector2Scale(arrow.b, TILE_SIZE), playerAbsPos);
   Vector2 c = Vector2Add(Vector2Scale(arrow.c, TILE_SIZE), playerAbsPos);
   DrawTriangle(a, b, c, RED);
+
+  // Draw framerate
+  int fps = GetFPS();
+  DrawText(TextFormat("FPS: %d", fps), 4, 4, 16, WHITE);
+
   EndDrawing();
 }
